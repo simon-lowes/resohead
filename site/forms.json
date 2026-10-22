@@ -1,0 +1,19 @@
+{
+ "3587d612418289301922cb515a041a54fb067cb2": {
+  "gblock-template-part-mpho-header-yourname": {
+   "label": "Your name",
+   "type": "name",
+   "required": true
+  },
+  "gblock-template-part-mpho-header-email": {
+   "label": "Email",
+   "type": "email",
+   "required": true
+  },
+  "gblock-template-part-mpho-header-message": {
+   "label": "Message",
+   "type": "textarea",
+   "required": false
+  }
+ }
+}
