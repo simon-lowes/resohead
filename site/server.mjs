@@ -95,16 +95,16 @@ function rateLimited(ip) {
 
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-async function sendEmail(fields, replyTo) {
+async function sendEmail(fields, replyTo, brief) {
   if (!RESEND_API_KEY || !CONTACT_TO || !CONTACT_FROM) return false;
-  const text = fields.map(f => `${f.label}:\n${f.value}`).join('\n\n');
-  const htmlBody = fields.map(f => `<p><strong>${escapeHtml(f.label)}</strong><br>${escapeHtml(f.value).replace(/\n/g, '<br>')}</p>`).join('');
+  const text = (brief ? brief.checklist + '\n\n' : '') + fields.map(f => `${f.label}:\n${f.value}`).join('\n\n');
+  const htmlBody = (brief ? `<pre>${escapeHtml(brief.checklist)}</pre>` : '') + fields.map(f => `<p><strong>${escapeHtml(f.label)}</strong><br>${escapeHtml(f.value).replace(/\n/g, '<br>')}</p>`).join('');
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: CONTACT_FROM, to: CONTACT_TO.split(',').map(s => s.trim()),
-      subject: 'New feedback received from your website',
+      subject: brief?.subject || 'New feedback received from your website',
       text, html: htmlBody, ...(replyTo ? { reply_to: replyTo } : {}),
     }),
     signal: AbortSignal.timeout(15_000),
@@ -150,7 +150,7 @@ async function handleContact(req, res) {
   if (fields.every(f => !f.value)) return fail('The form you are trying to submit is empty.');
 
   const verdict = await checkSpam(fields);
-  const record = { at: new Date().toISOString(), ip, fields: Object.fromEntries(fields.map(f => [f.label, f.value])), ...(verdict ? { spam: verdict } : {}) };
+  const record = { at: new Date().toISOString(), ip, fields: Object.fromEntries(fields.map(f => [f.label, f.value])), ...(verdict ? { spam: verdict } : {}) }; // verdict.brief holds the session brief check
   let saved = false;
   try {
     await mkdir(DATA_DIR, { recursive: true });
@@ -167,7 +167,7 @@ async function handleContact(req, res) {
   }
 
   let emailed = false;
-  try { emailed = await sendEmail(fields, replyTo); } catch (e) { console.error(e.message); }
+  try { emailed = await sendEmail(fields, replyTo, verdict?.brief); } catch (e) { console.error(e.message); }
   if (!emailed) console.log('contact submission', JSON.stringify(record));
   if (!saved && !emailed) return fail('Connection issue while submitting the form. Check that you are connected to the Internet and try again.', 500);
 
