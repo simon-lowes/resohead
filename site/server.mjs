@@ -6,6 +6,7 @@ import { createReadStream } from 'node:fs';
 import { stat, readFile, appendFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkSpam } from './spam.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(HERE, 'public');
@@ -148,13 +149,22 @@ async function handleContact(req, res) {
   }
   if (fields.every(f => !f.value)) return fail('The form you are trying to submit is empty.');
 
-  const record = { at: new Date().toISOString(), ip, fields: Object.fromEntries(fields.map(f => [f.label, f.value])) };
+  const verdict = await checkSpam(fields);
+  const record = { at: new Date().toISOString(), ip, fields: Object.fromEntries(fields.map(f => [f.label, f.value])), ...(verdict ? { spam: verdict } : {}) };
   let saved = false;
   try {
     await mkdir(DATA_DIR, { recursive: true });
     await appendFile(join(DATA_DIR, 'submissions.jsonl'), JSON.stringify(record) + '\n');
     saved = true;
   } catch (e) { console.error('could not save submission', e.message); }
+
+  // Spam is kept in submissions.jsonl but not emailed (if it couldn't be
+  // saved, it is emailed so nothing is lost). The sender sees the same
+  // thank-you either way, so spammers learn nothing.
+  if (verdict?.spam && saved) {
+    console.log('spam not emailed', JSON.stringify(record));
+    return json(res, 200, { success: true, data: fields });
+  }
 
   let emailed = false;
   try { emailed = await sendEmail(fields, replyTo); } catch (e) { console.error(e.message); }

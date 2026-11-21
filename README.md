@@ -17,13 +17,14 @@ The original Jetpack form script is unchanged. It posts to `/wp-admin/admin-ajax
 1. appended to `$DATA_DIR/submissions.jsonl` (default `/data`; mount a volume there), and
 2. emailed through Resend, if `RESEND_API_KEY`, `CONTACT_TO` and `CONTACT_FROM` are set. `CONTACT_FROM` must use a domain verified in Resend. Replies go to the sender's address.
 
-Spam protection: the Akismet honeypot field, plus a limit of 5 posts per IP per 10 minutes.
+Spam protection: the Akismet honeypot field, a limit of 5 posts per IP per 10 minutes, and, if `TYPESAFE_API_KEY` is set, a check by TypeSafe's Jev model (`site/spam.mjs`). Jev answers three yes/no questions (is it a sales pitch, is it about Resohead's music, is it meaningless) and code decides: a pitch that isn't about the music, or a meaningless message, is spam. Spam is saved to `submissions.jsonl` with `"spam": {...}` but not emailed; the sender sees the usual thank-you. Anything unsure, and any failed check, is emailed as normal. Each check sends the name, email and message to TypeSafe and costs a tiny fraction of a penny. Tests: `node --test site/spam.test.mjs`.
 
 ## Deploy (Dokploy)
 
 - Application, build type **Dockerfile**, container port **3000**.
 - Volume: mount persistent storage at `/data`.
 - Env (optional, for email): `RESEND_API_KEY`, `CONTACT_TO=resohead74@gmail.com`, `CONTACT_FROM=Resohead <website@yourdomain>`.
+- Env (optional, for the spam check): `TYPESAFE_API_KEY`, and `JEV_MODEL` (default `jev-latest`; pin a version once you're happy with it).
 - Health check: `GET /healthz`.
 
 ## Large files
