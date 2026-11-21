@@ -13,7 +13,7 @@ const browser = await chromium.launch();
 const viewports = { desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844, isMobile: true } };
 const problems = [];
 for (const [name, vp] of Object.entries(viewports)) {
-  for (const [label, base] of [['live', 'https://resohead.com'], ['clone', local]]) {
+  for (const [label, base] of [['live', process.env.LIVE || 'https://resohead.wpcomstaging.com'], ['clone', local]]) {
     const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: !!vp.isMobile, hasTouch: !!vp.isMobile });
     const page = await ctx.newPage();
     if (label === 'clone') {

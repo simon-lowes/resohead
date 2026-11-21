@@ -1,6 +1,6 @@
 # resohead.com
 
-A self-hosted static copy of resohead.com, taken from WordPress.com on 22 Oct 2026. The live pages (home and 404) match the original pixel for pixel at desktop and mobile widths. It needs no WordPress and no database: a dependency-free Node server (`site/server.mjs`) serves the files and handles the contact form.
+A self-hosted static copy of resohead.com, taken from WordPress.com on 21 Nov 2026. The live pages (home and 404) match the original pixel for pixel at desktop and mobile widths. It needs no WordPress and no database: a dependency-free Node server (`site/server.mjs`) serves the files and handles the contact form.
 
 ## What's in it
 
@@ -32,11 +32,13 @@ GitHub rejects files over 100 MB, so files over 45 MB are committed in parts (`*
 
 ## Re-snapshot (while the WordPress.com site still exists)
 
+Since Nov 2026 resohead.com redirects to the WordPress.com staging address, `resohead.wpcomstaging.com`, so pages are fetched from there. Set `SNAPSHOT_SOURCE` to use another address. The output still presents itself as `https://resohead.com`: canonical and `og:` URLs are absolute on that host, and nothing in it points to the staging host.
+
 ```sh
 cd tools && ln -s "$(npm root -g)/playwright" node_modules/playwright  # once
-node record.mjs https://resohead.com/ > /dev/null   # optional: re-record lazy-loaded requests to requests.txt
+node record.mjs https://resohead.wpcomstaging.com/ > /dev/null   # optional: re-record lazy-loaded requests to requests.txt
 cd .. && python3 -I tools/snapshot.py tools/requests.txt && tools/split-large.sh
-node tools/compare.mjs http://localhost:3000 .cache/compare   # pixel and request check against live
+node tools/compare.mjs http://localhost:3000 .cache/compare   # pixel and request check against the live source (LIVE=... to override)
 ```
 
 ## Not cloned

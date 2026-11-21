@@ -23,15 +23,20 @@ import urllib.parse
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "site", "public")
 CACHE = os.path.join(ROOT, ".cache")
-ORIGIN = "https://resohead.com"
-SITE_HOST = "resohead.com"
+# Where pages are fetched from. resohead.com redirects to the WordPress.com
+# staging address since Nov 2026; override with SNAPSHOT_SOURCE if that changes.
+ORIGIN = os.environ.get("SNAPSHOT_SOURCE", "https://resohead.wpcomstaging.com")
+SITE_HOST = urllib.parse.urlsplit(ORIGIN).netloc
+# The address the clone is published at: canonical and og: URLs point here.
+PUBLIC_ORIGIN = "https://resohead.com"
+SITE_HOSTS = {SITE_HOST, "resohead.com", "resohead.wpcomstaging.com"}
 
 PAGES = {"/": "index.html", "/this-page-does-not-exist/": "404.html"}
 
 # Hosts whose files are copied locally. Anything else (YouTube, Vimeo,
 # SoundCloud, Bandcamp, PayPal...) stays an external link or embed.
-LOCAL_HOSTS = {
-    SITE_HOST, "i0.wp.com", "i1.wp.com", "i2.wp.com", "s0.wp.com",
+LOCAL_HOSTS = SITE_HOSTS | {
+    "i0.wp.com", "i1.wp.com", "i2.wp.com", "s0.wp.com",
     "s1.wp.com", "s2.wp.com", "fonts.wp.com", "videos.files.wordpress.com",
     "videopress.com", "v0.wordpress.com",
 }
@@ -103,7 +108,7 @@ def local_path(url):
     if path.endswith("/"):
         path += "index.html"
     q = p.query
-    if p.netloc == SITE_HOST:
+    if p.netloc in SITE_HOSTS:
         # Version-only query strings are cache busters: keep the real path.
         keep = [kv for kv in q.split("&") if kv and kv.split("=")[0] not in ("ver", "m")]
         q = "&".join(keep)
@@ -114,7 +119,8 @@ def local_path(url):
     if q:
         # Query selects a variant (resized image, concatenated bundle): hash it in.
         base = base + "." + hashlib.sha1(q.encode()).hexdigest()[:10]
-    return prefix + base + ext
+    # Image CDN paths embed the source host; name them after the public one.
+    return (prefix + base + ext).replace("/" + SITE_HOST + "/", "/" + urllib.parse.urlsplit(PUBLIC_ORIGIN).netloc + "/")
 
 
 def ext_for(url):
@@ -179,14 +185,14 @@ def rewrite_text(text, base=None):
         raw = m.group(0)
         u = normalise(raw)
         p = urllib.parse.urlsplit(u)
-        if p.netloc == SITE_HOST and "/_static/" not in p.path and (p.path in ("", "/") or not os.path.splitext(p.path)[1]):
+        if p.netloc in SITE_HOSTS and "/_static/" not in p.path and (p.path in ("", "/") or not os.path.splitext(p.path)[1]):
             # A page link, not a file.
             if p.path.startswith(("/wp-json", "/xmlrpc", "/wp-admin", "/wp-login", "/feed", "/?")):
                 return raw
             loc = (p.path or "/") + (("?" + p.query) if p.query else "") + (("#" + p.fragment) if p.fragment else "")
-        elif p.netloc == SITE_HOST and p.path == "/wp-admin/admin-ajax.php":
+        elif p.netloc in SITE_HOSTS and p.path == "/wp-admin/admin-ajax.php":
             loc = p.path
-        elif p.netloc == SITE_HOST and p.path.startswith(("/wp-admin", "/wp-login", "/wp-json")):
+        elif p.netloc in SITE_HOSTS and p.path.startswith(("/wp-admin", "/wp-login", "/wp-json")):
             return raw
         else:
             loc = localise(u)
@@ -261,8 +267,13 @@ def build_page(path, name, forms):
     page = replace_videopress(page)
     extract_forms(page, forms)
     page = rewrite_text(page)
-    # Stray absolute page links to the old host (e.g. og:url stays absolute).
-    page = page.replace("href=\"https://resohead.com/#", "href=\"/#")
+    # Social previews and search engines need absolute URLs on the public host.
+    page = re.sub(r'(<meta (?:property|name)="(?:og:url|og:image|twitter:image)" content=")(/[^"]*)"',
+                  lambda m: f'{m.group(1)}{PUBLIC_ORIGIN}{m.group(2)}"', page)
+    page = re.sub(r"(<link rel=['\"]canonical['\"] href=['\"])(/[^'\"]*)",
+                  lambda m: m.group(1) + PUBLIC_ORIGIN + m.group(2), page)
+    # Anything left on the source host (e.g. config blobs) names the public one.
+    page = page.replace("https://" + SITE_HOST, PUBLIC_ORIGIN).replace("https:\\/\\/" + SITE_HOST, PUBLIC_ORIGIN.replace("/", "\\/"))
     save("/" + name, page.encode())
 
 
